@@ -7,6 +7,12 @@ using System.Windows.Forms;
 
 namespace LowPolyMotion
 {
+    class rangeZ
+    {
+        public static int min = 0;
+        public static int max = 500;
+    }
+
     class xyz
     {
         public float x;
@@ -88,27 +94,29 @@ namespace LowPolyMotion
         }
     }
 
-    class PointF
+    class MotionPoint
     {
-        public int x;
-        public int y;
+        public MotionData motionData;
 
-        public PointF(int x, int y)
+        public MotionPoint(int n, int i, xyz begin_xyz, xyz target_xyz)
         {
-            this.x = x;
-            this.y = y;
+            motionData = new MotionData(n, i, begin_xyz, target_xyz);
         }
 
         // 运算符重载
-        public static PointF operator +(PointF point1, PointF point2)
+        public static MotionPoint operator +(MotionPoint point1, MotionPoint point2)
         {
-            PointF result = new PointF(point1.x + point2.x, point1.y + point2.y);
+            MotionPoint result = point1;
+            result.motionData.current_xyz.x += point2.motionData.current_xyz.x;
+            result.motionData.current_xyz.y += point2.motionData.current_xyz.y;
             return result;
         }
 
-        public static PointF operator -(PointF point1, PointF point2)
+        public static MotionPoint operator -(MotionPoint point1, MotionPoint point2)
         {
-            PointF result = new PointF(point1.x - point2.x, point1.y - point2.y);
+            MotionPoint result = point1;
+            result.motionData.current_xyz.x -= point2.motionData.current_xyz.x;
+            result.motionData.current_xyz.y -= point2.motionData.current_xyz.y;
             return result;
         }
     }
@@ -135,7 +143,7 @@ namespace LowPolyMotion
         public int i;
         public xyz begin_xyz;
         public xyz target_xyz;
-        private xyz current_xyz;
+        public xyz current_xyz;
 
         public MotionData(int n, int i, xyz begin_xyz, xyz target_xyz)
         {
