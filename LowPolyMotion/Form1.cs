@@ -7,18 +7,21 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Threading;
 
 namespace WindowsFormsApp1
 {
     public partial class Form1 : Form
     {
+        private int boardWidth;
+        private int boardHeight;
         private System.Timers.Timer timer = new System.Timers.Timer();
         private LowPolyMotion.GridConfig grid;
         private LowPolyMotion.Rect[,] rects;
         private LowPolyMotion.MotionPoint[,] points;
         private LowPolyMotion.MotionPoint light;
-        private int i = 10;
         private Random rand = new Random();
+        private static Mutex mutex = null;
 
         public Form1()
         {
@@ -27,19 +30,33 @@ namespace WindowsFormsApp1
             SetStyle(ControlStyles.AllPaintingInWmPaint, true); // 禁止擦除背景
             SetStyle(ControlStyles.OptimizedDoubleBuffer, true); // 开启双缓冲
 
+            boardWidth = this.Size.Width - 16;
+            boardHeight = this.Size.Height - 46;
+
             // LowPolyMotion 全局初始化
             grid = new LowPolyMotion.GridConfig();
-            InitializeLowPolyConfig(grid, this.Size.Width - 16, this.Size.Height - 46, 10);
+            InitializeLowPolyConfig(grid, boardWidth, boardHeight, int.Parse(textBox1.Text));
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
             timer.Elapsed += timer_event;
             this.SizeChanged += Form1_SizeChanged;
+            this.Paint += Form1_Paint;
+            this.textBox1.KeyPress += textBox1_KeyPress;
+            mutex = new Mutex();
+        }
+
+        private void Form1_Paint(object sender, EventArgs e)
+        {
+            Draw(grid, rects, points, checkBox1.Checked);
         }
 
         private void InitializeLowPolyConfig(LowPolyMotion.GridConfig gridConfig, int boardWidth, int boardHeight, int pointCount)
         {
+            if (pointCount <= 1)
+                pointCount = 2;
+
             // Initialize Grid
             gridConfig.initGridConfig(boardWidth, boardHeight, pointCount);
 
@@ -68,7 +85,10 @@ namespace WindowsFormsApp1
             CalOutCenter(gridConfig, ref rects, points);
 
             // Initialize Light
-            light = new LowPolyMotion.MotionPoint(500, 0, new LowPolyMotion.xyz(boardWidth / 2, boardHeight / 2, rand.Next(LowPolyMotion.rangeZ.min, LowPolyMotion.rangeZ.max)), NewEndXYZ(boardWidth, boardHeight, LowPolyMotion.rangeZ.max));
+            light = new LowPolyMotion.MotionPoint(rand.Next(LowPolyMotion.rangeN.min, LowPolyMotion.rangeN.max), 0, new LowPolyMotion.xyz(boardWidth / 2, boardHeight / 2, rand.Next(LowPolyMotion.rangeZ.min, LowPolyMotion.rangeZ.max)), NewEndXYZ(boardWidth, boardHeight, LowPolyMotion.rangeZ.light_min, LowPolyMotion.rangeZ.light_max));
+
+            // Color Rendering
+            ColorRendering(gridConfig, ref rects, points);
         }
 
         private void InitializePoints(LowPolyMotion.GridConfig gridConfig, ref LowPolyMotion.MotionPoint[,] points)
@@ -78,7 +98,7 @@ namespace WindowsFormsApp1
             {
                 for (int j = 0; j < gridInfo.c_y; j++)
                 {
-                    points[i, j] = new LowPolyMotion.MotionPoint(500, 0, NewEndXYZ(gridConfig, i, j), NewEndXYZ(gridConfig, i, j));
+                    points[i, j] = new LowPolyMotion.MotionPoint(rand.Next(LowPolyMotion.rangeN.min, LowPolyMotion.rangeN.max), 0, NewEndXYZ(gridConfig, i, j), NewEndXYZ(gridConfig, i, j));
                 }
             }
         }
@@ -110,24 +130,66 @@ namespace WindowsFormsApp1
             return result;
         }
 
-        private LowPolyMotion.xyz NewEndXYZ(int maxX, int maxY, int maxZ)
+        private void Form1_SizeChanged(object sender, EventArgs e)
+        {
+            timer.Stop();
+            boardWidth = this.Size.Width - 16;
+            boardHeight = this.Size.Height - 46;
+            InitializeLowPolyConfig(grid, boardWidth, boardHeight, int.Parse(textBox1.Text));
+            Draw(grid, rects, points, checkBox1.Checked);
+            panel1.Show();
+        }
+
+        private LowPolyMotion.xyz NewEndXYZ(int maxX, int maxY, int minZ, int maxZ)
         {
             LowPolyMotion.xyz result = new LowPolyMotion.xyz(rand.Next(0, maxX + 1), rand.Next(0, maxY + 1), rand.Next(0, maxZ + 1));
             return result;
         }
 
-        private void Form1_SizeChanged(object sender, EventArgs e)
-        {
-            InitializeLowPolyConfig(grid, this.Size.Width - 16, this.Size.Height - 46, 10);
-            Draw(grid, rects, points);
-        }
-
         private void timer_event(object sender, System.Timers.ElapsedEventArgs e)
         {
-            Draw(grid, rects, points);
+            // 上锁 (c# System.Timers.Timer 是多线程执行的, 若不上锁则一旦绘制时间超过了时钟周期将出现写冲突)
+            mutex.WaitOne();
+
+            LowPolyMotion.GridInfo gridInfo = grid.getGridInfo();
+
+            // 更新点坐标
+            for (int i = 0; i < gridInfo.c_x; i++)
+            {
+                for (int j = 0; j < gridInfo.c_y; j++)
+                {
+                    if(points[i, j].motionData.NextStep())
+                    {
+                        points[i, j].motionData.begin_xyz = points[i, j].motionData.target_xyz;
+                        points[i, j].motionData.target_xyz = NewEndXYZ(grid, i, j);
+                        points[i, j].motionData.i = 0;
+                        points[i, j].motionData.n = rand.Next(LowPolyMotion.rangeN.min, LowPolyMotion.rangeN.max);
+                    }
+                }
+            }
+
+            // 更新光源坐标
+            if(light.motionData.NextStep())
+            {
+                light.motionData.begin_xyz = light.motionData.target_xyz;
+                light.motionData.target_xyz = NewEndXYZ(boardWidth, boardHeight, LowPolyMotion.rangeZ.light_min, LowPolyMotion.rangeZ.light_max);
+                light.motionData.i = 0;
+                light.motionData.n = rand.Next(LowPolyMotion.rangeN.min, LowPolyMotion.rangeN.max);
+            }
+
+            // 更新重心坐标
+            CalOutCenter(grid, ref rects, points);
+
+            // 重新渲染颜色
+            ColorRendering(grid, ref rects, points);
+
+            Draw(grid, rects, points, checkBox1.Checked);
+
+            // 解锁
+            mutex.ReleaseMutex();
         }
 
-        private void Draw(LowPolyMotion.GridConfig gridConfig, LowPolyMotion.Rect[,] rects, LowPolyMotion.MotionPoint[,] points)
+        private void Draw(LowPolyMotion.GridConfig gridConfig, LowPolyMotion.Rect[,] rects, LowPolyMotion.MotionPoint[,] points, Boolean showExtrInf = false)
         {
             // 在内存中建立虚拟画布
             Bitmap bitmap = new Bitmap(this.Size.Width, this.Size.Height);
@@ -143,80 +205,115 @@ namespace WindowsFormsApp1
             Pen myPen = new Pen(Color.Black, 2);
 
             // 绘图
-            /// 画网格线
-            myPen.Color = Color.Tan;
-            for (int i = 0; i < gridInfo.c_x + 1; i++)
+            if(showExtrInf)
             {
-                g.DrawLine(myPen, gridInfo.c_w * i, 0, gridInfo.c_w * i, gridInfo.c_h * gridInfo.c_y);
-            }
-            for (int j = 0; j < gridInfo.c_y + 1; j++)
-            {
-                g.DrawLine(myPen, 0, gridInfo.c_h * j, gridInfo.c_w * gridInfo.c_x, gridInfo.c_h * j);
-            }
-            /// 画点
-            myPen.Color = Color.Black;
-            for (int i = 0; i < gridInfo.c_x; i++)
-            {
-                for (int j = 0; j < gridInfo.c_y; j++)
+                /// 画网格线
+                myPen.Color = Color.Tan;
+                for (int i = 0; i < gridInfo.c_x + 1; i++)
                 {
-                    g.DrawRectangle(myPen, points[i, j].motionData.current_xyz.x - 1, points[i, j].motionData.current_xyz.y - 1, 2, 2);
+                    g.DrawLine(myPen, gridInfo.c_w * i, 0, gridInfo.c_w * i, gridInfo.c_h * gridInfo.c_y);
                 }
-            }
-            /// 连线
-            myPen.Color = Color.Black;
-            LowPolyMotion.MotionPoint[] ro_p = new LowPolyMotion.MotionPoint[4];
-            
-            for (int i = 0; i < gridInfo.c_x - 1; i++)
-            {
-                for (int j = 0; j < gridInfo.c_y - 1; j++)
+                for (int j = 0; j < gridInfo.c_y + 1; j++)
                 {
-                    // 被连线的网格顶点
-                    ro_p[0] = points[i, j];
-                    ro_p[1] = points[i + 1, j];
-                    ro_p[2] = points[i, j + 1];
-                    ro_p[3] = points[i + 1, j + 1];
-
-                    // 四边形连线
-                    g.DrawLine(myPen, ro_p[0].motionData.current_xyz.x, ro_p[0].motionData.current_xyz.y, ro_p[1].motionData.current_xyz.x, ro_p[1].motionData.current_xyz.y);
-                    g.DrawLine(myPen, ro_p[0].motionData.current_xyz.x, ro_p[0].motionData.current_xyz.y, ro_p[2].motionData.current_xyz.x, ro_p[2].motionData.current_xyz.y);
-                    g.DrawLine(myPen, ro_p[1].motionData.current_xyz.x, ro_p[1].motionData.current_xyz.y, ro_p[3].motionData.current_xyz.x, ro_p[3].motionData.current_xyz.y);
-                    g.DrawLine(myPen, ro_p[2].motionData.current_xyz.x, ro_p[2].motionData.current_xyz.y, ro_p[3].motionData.current_xyz.x, ro_p[3].motionData.current_xyz.y);
-
-                    // 对角线
-                    if (rects[i,j].T_Diagonal == 0) // 0.\  1./
-                        g.DrawLine(myPen, ro_p[0].motionData.current_xyz.x, ro_p[0].motionData.current_xyz.y, ro_p[3].motionData.current_xyz.x, ro_p[3].motionData.current_xyz.y);
-                    else
-                        g.DrawLine(myPen, ro_p[1].motionData.current_xyz.x, ro_p[1].motionData.current_xyz.y, ro_p[2].motionData.current_xyz.x, ro_p[2].motionData.current_xyz.y);
+                    g.DrawLine(myPen, 0, gridInfo.c_h * j, gridInfo.c_w * gridInfo.c_x, gridInfo.c_h * j);
                 }
-            }
 
-            // 画点光源
-            myPen.Color = Color.Red;
-            g.DrawRectangle(myPen, light.motionData.current_xyz.x - 2, light.motionData.current_xyz.y - 2, 4, 4);
-
-            // 画重心
-            myPen.Color = Color.DarkBlue;
-            for (int i = 0; i < gridInfo.c_x - 1; i++)
-            {
-                for (int j = 0; j < gridInfo.c_y - 1; j++)
+                /// 画点
+                myPen.Color = Color.Black;
+                for (int i = 0; i < gridInfo.c_x; i++)
                 {
-                    g.DrawRectangle(myPen, rects[i, j].outcentreXYZ[0].x - 2, rects[i, j].outcentreXYZ[0].y - 2, 4, 4);
-                    g.DrawRectangle(myPen, rects[i, j].outcentreXYZ[1].x - 2, rects[i, j].outcentreXYZ[1].y - 2, 4, 4);
+                    for (int j = 0; j < gridInfo.c_y; j++)
+                    {
+                        g.DrawRectangle(myPen, points[i, j].motionData.current_xyz.x - 1, points[i, j].motionData.current_xyz.y - 1, 2, 2);
+                    }
+                }
+
+                /// 连线
+                myPen.Color = Color.Black;
+                LowPolyMotion.MotionPoint[] ro_p = new LowPolyMotion.MotionPoint[4];
+
+                for (int i = 0; i < gridInfo.c_x - 1; i++)
+                {
+                    for (int j = 0; j < gridInfo.c_y - 1; j++)
+                    {
+                        // 被连线的网格顶点
+                        ro_p[0] = points[i, j];
+                        ro_p[1] = points[i + 1, j];
+                        ro_p[2] = points[i, j + 1];
+                        ro_p[3] = points[i + 1, j + 1];
+
+                        // 四边形连线
+                        g.DrawLine(myPen, ro_p[0].motionData.current_xyz.x, ro_p[0].motionData.current_xyz.y, ro_p[1].motionData.current_xyz.x, ro_p[1].motionData.current_xyz.y);
+                        g.DrawLine(myPen, ro_p[0].motionData.current_xyz.x, ro_p[0].motionData.current_xyz.y, ro_p[2].motionData.current_xyz.x, ro_p[2].motionData.current_xyz.y);
+                        g.DrawLine(myPen, ro_p[1].motionData.current_xyz.x, ro_p[1].motionData.current_xyz.y, ro_p[3].motionData.current_xyz.x, ro_p[3].motionData.current_xyz.y);
+                        g.DrawLine(myPen, ro_p[2].motionData.current_xyz.x, ro_p[2].motionData.current_xyz.y, ro_p[3].motionData.current_xyz.x, ro_p[3].motionData.current_xyz.y);
+
+                        // 对角线
+                        if (rects[i, j].T_Diagonal == 0) // 0.\  1./
+                            g.DrawLine(myPen, ro_p[0].motionData.current_xyz.x, ro_p[0].motionData.current_xyz.y, ro_p[3].motionData.current_xyz.x, ro_p[3].motionData.current_xyz.y);
+                        else
+                            g.DrawLine(myPen, ro_p[1].motionData.current_xyz.x, ro_p[1].motionData.current_xyz.y, ro_p[2].motionData.current_xyz.x, ro_p[2].motionData.current_xyz.y);
+                    }
                 }
             }
 
-                    // 将内存画布绘制到屏幕上
-                    Graphics myGraphics = this.CreateGraphics();
-            myGraphics.DrawImage(bitmap, 0, 0);
-
-            /*
-            Brush myBrush = new SolidBrush(Color.BlueViolet);
+            // 颜色渲染
+            SolidBrush myBrush = new SolidBrush(Color.BlueViolet);
             Point[] myPoints = new Point[3];
-            myPoints[0].X = moveLength; myPoints[0].Y = moveLength;
-            myPoints[1].X = 100 + moveLength; myPoints[1].Y = 10 + moveLength;
-            myPoints[2].X = 100 + moveLength; myPoints[2].Y = 100 + moveLength;
-            g.FillPolygon(myBrush, myPoints);
-            */
+            for (int i = 0; i < gridInfo.c_x - 1; i++)
+            {
+                for (int j = 0; j < gridInfo.c_y - 1; j++)
+                {
+                    if(rects[i,j].T_Diagonal == 0) // 0.\ 1./
+                    {
+                        // 左边面
+                        myPoints[0].X = (int)points[i, j].motionData.current_xyz.x; myPoints[0].Y = (int)points[i, j].motionData.current_xyz.y;
+                        myPoints[1].X = (int)points[i, j + 1].motionData.current_xyz.x; myPoints[1].Y = (int)points[i, j + 1].motionData.current_xyz.y;
+                        myPoints[2].X = (int)points[i + 1, j + 1].motionData.current_xyz.x; myPoints[2].Y = (int)points[i + 1, j + 1].motionData.current_xyz.y;
+                        myBrush.Color = Color.FromArgb(rects[i, j].color[0].R, rects[i, j].color[0].G, rects[i, j].color[0].B);
+                        g.FillPolygon(myBrush, myPoints);
+                        // 右边面
+                        myPoints[1].X = (int)points[i + 1, j].motionData.current_xyz.x; myPoints[1].Y = (int)points[i + 1, j].motionData.current_xyz.y;
+                        myBrush.Color = Color.FromArgb(rects[i, j].color[1].R, rects[i, j].color[1].G, rects[i, j].color[1].B);
+                        g.FillPolygon(myBrush, myPoints);
+                    }
+                    else
+                    {
+                        // 左边面
+                        myPoints[0].X = (int)points[i, j].motionData.current_xyz.x; myPoints[0].Y = (int)points[i, j].motionData.current_xyz.y;
+                        myPoints[1].X = (int)points[i + 1, j].motionData.current_xyz.x; myPoints[1].Y = (int)points[i + 1, j].motionData.current_xyz.y;
+                        myPoints[2].X = (int)points[i, j + 1].motionData.current_xyz.x; myPoints[2].Y = (int)points[i, j + 1].motionData.current_xyz.y;
+                        myBrush.Color = Color.FromArgb(rects[i, j].color[0].R, rects[i, j].color[0].G, rects[i, j].color[0].B);
+                        g.FillPolygon(myBrush, myPoints);
+                        // 右边面
+                        myPoints[0].X = (int)points[i + 1, j + 1].motionData.current_xyz.x; myPoints[0].Y = (int)points[i + 1, j + 1].motionData.current_xyz.y;
+                        myBrush.Color = Color.FromArgb(rects[i, j].color[1].R, rects[i, j].color[1].G, rects[i, j].color[1].B);
+                        g.FillPolygon(myBrush, myPoints);
+                    }
+                }
+            }
+
+            if (showExtrInf)
+            {
+                // 画重心
+                myPen.Color = Color.DarkBlue;
+                for (int i = 0; i < gridInfo.c_x - 1; i++)
+                {
+                    for (int j = 0; j < gridInfo.c_y - 1; j++)
+                    {
+                        g.DrawRectangle(myPen, rects[i, j].outcentreXYZ[0].x - 2, rects[i, j].outcentreXYZ[0].y - 2, 4, 4);
+                        g.DrawRectangle(myPen, rects[i, j].outcentreXYZ[1].x - 2, rects[i, j].outcentreXYZ[1].y - 2, 4, 4);
+                    }
+                }
+
+                // 画点光源
+                myPen.Color = Color.Red;
+                g.DrawRectangle(myPen, light.motionData.current_xyz.x - 2, light.motionData.current_xyz.y - 2, 4, 4);
+            }
+
+            // 将内存画布绘制到屏幕上
+            Graphics myGraphics = this.CreateGraphics();
+            myGraphics.DrawImage(bitmap, 0, 0); 
 
             // 释放资源
             bitmap.Dispose();
@@ -246,16 +343,85 @@ namespace WindowsFormsApp1
             }
         }
 
+        private void ColorRendering(LowPolyMotion.GridConfig gridConfig, ref LowPolyMotion.Rect[,] rects, LowPolyMotion.MotionPoint[,] points)
+        {
+            LowPolyMotion.GridInfo gridInfo = gridConfig.getGridInfo();
+            LowPolyMotion.RGB[] paintRGB = new LowPolyMotion.RGB[2];
+            LowPolyMotion.Vector[] v1 = new LowPolyMotion.Vector[2]; // 面的法向量
+            LowPolyMotion.Vector[] v2 = new LowPolyMotion.Vector[2]; // 重心到光源的向量
+            float[] cosin = new float[2]; // v1与v2夹角的余弦值
+
+            for (int i = 0; i < gridInfo.c_x - 1; i++)
+            {
+                for (int j = 0; j < gridInfo.c_y - 1; j++)
+                {
+                    // 计算 v1
+                    if(rects[i,j].T_Diagonal == 0) // 0.\ 1./
+                    {
+                        v1[0] = LowPolyMotion.Calculate_3D.Cal_3DNormalVector(points[i, j].motionData.current_xyz, points[i, j + 1].motionData.current_xyz, points[i + 1, j + 1].motionData.current_xyz);
+                        v1[1] = LowPolyMotion.Calculate_3D.Cal_3DNormalVector(points[i, j].motionData.current_xyz, points[i + 1, j].motionData.current_xyz, points[i + 1, j + 1].motionData.current_xyz);
+                    }
+                    else
+                    {
+                        v1[0] = LowPolyMotion.Calculate_3D.Cal_3DNormalVector(points[i, j].motionData.current_xyz, points[i + 1, j].motionData.current_xyz, points[i, j + 1].motionData.current_xyz);
+                        v1[1] = LowPolyMotion.Calculate_3D.Cal_3DNormalVector(points[i + 1, j + 1].motionData.current_xyz, points[i + 1, j].motionData.current_xyz, points[i, j + 1].motionData.current_xyz);
+                    }
+                    v1[0] = LowPolyMotion.Calculate_3D.Turn2EffectiveNV(v1[0]);
+                    v1[1] = LowPolyMotion.Calculate_3D.Turn2EffectiveNV(v1[1]);
+
+                    // 计算 v2
+                    v2[0] = LowPolyMotion.Calculate_3D.Cal_3DGetVector(rects[i, j].outcentreXYZ[0], light.motionData.current_xyz);
+                    v2[1] = LowPolyMotion.Calculate_3D.Cal_3DGetVector(rects[i, j].outcentreXYZ[1], light.motionData.current_xyz);
+
+                    // 计算 cosine
+                    cosin[0] = LowPolyMotion.Calculate_3D.Cal_3Dcos(v1[0], v2[0]);
+                    cosin[1] = LowPolyMotion.Calculate_3D.Cal_3Dcos(v1[1], v2[1]);
+
+                    // 计算着色
+                    paintRGB[0] = LowPolyMotion.PaintRGB.RGB_Mid;
+                    paintRGB[1] = LowPolyMotion.PaintRGB.RGB_Mid;
+                    /// 左边面
+                    if (cosin[0] > 0) // 向光
+                        paintRGB[0] += (LowPolyMotion.PaintRGB.RGB_Light - LowPolyMotion.PaintRGB.RGB_Mid) * Math.Abs(cosin[0]);
+                    else if (cosin[0] < 0) // 背光
+                        paintRGB[0] -= (LowPolyMotion.PaintRGB.RGB_Mid - LowPolyMotion.PaintRGB.RGB_Dark) * Math.Abs(cosin[0]);
+                    /// 右边面
+                    if (cosin[1] > 0) // 向光
+                        paintRGB[1] += (LowPolyMotion.PaintRGB.RGB_Light - LowPolyMotion.PaintRGB.RGB_Mid) * Math.Abs(cosin[1]);
+                    else if (cosin[1] < 0) // 背光
+                        paintRGB[1] -= (LowPolyMotion.PaintRGB.RGB_Mid - LowPolyMotion.PaintRGB.RGB_Dark) * Math.Abs(cosin[1]);
+
+                    // rect上色
+                    rects[i, j].color[0] = paintRGB[0];
+                    rects[i, j].color[1] = paintRGB[1];
+                    
+                }
+            }
+        }
+
         private void button1_Click(object sender, EventArgs e)
         {
-            /*
-            timer.Interval = 5;
+            timer.Interval = 10;
             timer.Start();
-            */
-            InitializeLowPolyConfig(grid, this.Size.Width - 16, this.Size.Height - 46, 10);
-
-            Draw(grid, rects, points);
-
+            panel1.Hide();
         }
+
+        private void textBox1_TextChanged(object sender, EventArgs e)
+        {
+            if (textBox1.Text == "")
+                return;
+            grid = new LowPolyMotion.GridConfig();
+            InitializeLowPolyConfig(grid, boardWidth, boardHeight, int.Parse(textBox1.Text));
+            Draw(grid, rects, points, checkBox1.Checked);
+        }
+
+        private void textBox1_KeyPress(object sender, System.Windows.Forms.KeyPressEventArgs e)
+        {
+            if (!((e.KeyChar >= 48 && e.KeyChar <= 57) || e.KeyChar == '.' || e.KeyChar == 8))
+            {
+                e.Handled = true;
+            }
+        }
+
     }
 }

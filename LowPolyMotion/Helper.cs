@@ -10,7 +10,22 @@ namespace LowPolyMotion
     class rangeZ
     {
         public static int min = 0;
-        public static int max = 500;
+        public static int max = 50;
+        public static int light_min = 100;
+        public static int light_max = 120;
+    }
+
+    class rangeN
+    {
+        public static int min = 80;
+        public static int max = 180;
+    }
+
+    class PaintRGB
+    {
+        public static LowPolyMotion.RGB RGB_Light = new LowPolyMotion.RGB(0, 255, 255);
+        public static LowPolyMotion.RGB RGB_Dark = new LowPolyMotion.RGB(0, 50, 120);
+        public static LowPolyMotion.RGB RGB_Mid = new LowPolyMotion.RGB((int)((RGB_Light.R + RGB_Dark.R) / 2), (int)((RGB_Light.G + RGB_Dark.G) / 2), (int)((RGB_Light.B + RGB_Dark.B) / 2));
     }
 
     class xyz
@@ -124,6 +139,27 @@ namespace LowPolyMotion
     class RGB
     {
         public int R, G, B;
+        public RGB(int R, int G, int B)
+        {
+            this.R = R;
+            this.G = G;
+            this.B = B;
+        }
+
+        public static LowPolyMotion.RGB operator +(LowPolyMotion.RGB rgb1, LowPolyMotion.RGB rgb2)
+        {
+            return new LowPolyMotion.RGB(rgb1.R + rgb2.R, rgb1.G + rgb2.G, rgb1.B + rgb2.B);
+        }
+
+        public static LowPolyMotion.RGB operator -(LowPolyMotion.RGB rgb1, LowPolyMotion.RGB rgb2)
+        {
+            return new LowPolyMotion.RGB(rgb1.R - rgb2.R, rgb1.G - rgb2.G, rgb1.B - rgb2.B);
+        }
+
+        public static LowPolyMotion.RGB operator *(LowPolyMotion.RGB rgb, float param)
+        {
+            return new LowPolyMotion.RGB((int)(rgb.R * param), (int)(rgb.G * param), (int)(rgb.B * param));
+        }
     }
 
     class Rect
@@ -154,7 +190,7 @@ namespace LowPolyMotion
             this.current_xyz = begin_xyz;
         }
 
-        public Boolean Next()
+        public Boolean NextStep()
         {
             this.i++;
 

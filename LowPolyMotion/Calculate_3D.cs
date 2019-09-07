@@ -39,6 +39,34 @@ namespace LowPolyMotion
             return oP;
         }
 
+        public static LowPolyMotion.Vector Cal_3DNormalVector(LowPolyMotion.xyz p1, LowPolyMotion.xyz p2, LowPolyMotion.xyz p3) // 计算空间面的法向量
+        {
+            LowPolyMotion.Vector NV = new LowPolyMotion.Vector(0, 0, 0);
+            LowPolyMotion.Vector tempV1 = new LowPolyMotion.Vector(0, 0, 0);
+            LowPolyMotion.Vector tempV2 = new LowPolyMotion.Vector(0, 0, 0);
+            tempV1 = Cal_3DGetVector(p1, p2);
+            tempV2 = Cal_3DGetVector(p1, p3);
+            NV.x = tempV1.y * tempV2.z - tempV1.z * tempV2.y;
+            NV.y = -(tempV1.x * tempV2.z - tempV1.z * tempV2.x);
+            NV.z = tempV1.x * tempV2.y - tempV1.y * tempV2.x;
+            return NV;
+        }
+
+        public static LowPolyMotion.Vector Turn2EffectiveNV(LowPolyMotion.Vector NV) // 转为有效法向量(指向屏幕外侧)
+        {
+            LowPolyMotion.Vector _NV = new LowPolyMotion.Vector(0, 0, 0);
+            LowPolyMotion.Vector zV = new LowPolyMotion.Vector(0, 0, 1);
+            _NV = NV;
+            if(Cal_3Dcos(_NV,zV)<0)
+            {
+                _NV.x = -_NV.x;
+                _NV.y = -_NV.y;
+                _NV.z = -_NV.z;
+            }
+            return _NV;
+
+        }
+
         /*
         public static LowPolyMotion.xyz Cal_3DoutCenter(LowPolyMotion.xyz p1, LowPolyMotion.xyz p2, LowPolyMotion.xyz p3) // 求空间三角形外心坐标
         {
