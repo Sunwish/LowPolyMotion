@@ -301,8 +301,12 @@ namespace WindowsFormsApp1
                 {
                     for (int j = 0; j < gridInfo.c_y - 1; j++)
                     {
+                        myPen.Color = Color.DarkBlue;
                         g.DrawRectangle(myPen, rects[i, j].outcentreXYZ[0].x - 2, rects[i, j].outcentreXYZ[0].y - 2, 4, 4);
                         g.DrawRectangle(myPen, rects[i, j].outcentreXYZ[1].x - 2, rects[i, j].outcentreXYZ[1].y - 2, 4, 4);
+                        myPen.Color = Color.FromArgb(50,23,23,23);
+                        g.DrawLine(myPen, rects[i, j].outcentreXYZ[0].x, rects[i, j].outcentreXYZ[0].y, light.motionData.current_xyz.x, light.motionData.current_xyz.y);
+                        g.DrawLine(myPen, rects[i, j].outcentreXYZ[1].x, rects[i, j].outcentreXYZ[1].y, light.motionData.current_xyz.x, light.motionData.current_xyz.y);
                     }
                 }
 
@@ -423,5 +427,9 @@ namespace WindowsFormsApp1
             }
         }
 
+        private void Form1_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            timer.Stop();
+        }
     }
 }
