@@ -7,3 +7,13 @@ C:\Users\Machenike\Documents\Visual Studio 2017\Projects\WindowsFormsApp1\Window
 C:\Users\Machenike\Documents\Visual Studio 2017\Projects\WindowsFormsApp1\WindowsFormsApp1\obj\Debug\LowPolyMotion.Properties.Resources.resources
 C:\Users\Machenike\Documents\Visual Studio 2017\Projects\WindowsFormsApp1\WindowsFormsApp1\obj\Debug\LowPolyMotion.exe
 C:\Users\Machenike\Documents\Visual Studio 2017\Projects\WindowsFormsApp1\WindowsFormsApp1\obj\Debug\LowPolyMotion.pdb
+E:\MyGit\LowPolyMotion\LowPolyMotion\bin\Debug\LowPolyMotion.exe.config
+E:\MyGit\LowPolyMotion\LowPolyMotion\bin\Debug\LowPolyMotion.exe
+E:\MyGit\LowPolyMotion\LowPolyMotion\bin\Debug\LowPolyMotion.pdb
+E:\MyGit\LowPolyMotion\LowPolyMotion\obj\Debug\LowPolyMotion.csprojResolveAssemblyReference.cache
+E:\MyGit\LowPolyMotion\LowPolyMotion\obj\Debug\WindowsFormsApp1.Form1.resources
+E:\MyGit\LowPolyMotion\LowPolyMotion\obj\Debug\LowPolyMotion.Properties.Resources.resources
+E:\MyGit\LowPolyMotion\LowPolyMotion\obj\Debug\LowPolyMotion.csproj.GenerateResource.Cache
+E:\MyGit\LowPolyMotion\LowPolyMotion\obj\Debug\LowPolyMotion.csproj.CoreCompileInputs.cache
+E:\MyGit\LowPolyMotion\LowPolyMotion\obj\Debug\LowPolyMotion.exe
+E:\MyGit\LowPolyMotion\LowPolyMotion\obj\Debug\LowPolyMotion.pdb
