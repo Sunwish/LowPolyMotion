@@ -103,7 +103,6 @@ namespace WindowsFormsApp1
             myPoints[2].X = 100 + moveLength; myPoints[2].Y = 100 + moveLength;
             g.FillPolygon(myBrush, myPoints);
             */
-            // i += 10;
 
 
             // 释放资源
