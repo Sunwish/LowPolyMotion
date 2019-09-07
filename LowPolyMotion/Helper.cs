@@ -242,7 +242,6 @@ namespace LowPolyMotion
             this.directionCellHeight = boardHeight / this.directionCellCount;
         }
 
-
         public int getCrossCellWidth()
         {
             return this.crossCellWidth;
@@ -261,6 +260,35 @@ namespace LowPolyMotion
         public int getDirectionCellCount()
         {
             return this.directionCellCount;
+        }
+
+        public GridInfo getGridInfo()
+        {
+            return new GridInfo(getCrossCellCount(), getDirectionCellCount(), getCrossCellWidth(),getDirectionCellHeight());
+        }
+    }
+
+    class GridInfo
+    {
+        public int c_x;
+        public int c_y;
+        public int c_w;
+        public int c_h;
+
+        public GridInfo(int c_x, int c_y, int c_w, int c_h)
+        {
+            this.c_x = c_x;
+            this.c_y = c_y;
+            this.c_w = c_w;
+            this.c_h = c_h;
+        }
+
+        public GridInfo(GridInfo gridInfo)
+        {
+            this.c_x = gridInfo.c_x;
+            this.c_y = gridInfo.c_y;
+            this.c_w = gridInfo.c_w;
+            this.c_h = gridInfo.c_h;
         }
     }
 }
